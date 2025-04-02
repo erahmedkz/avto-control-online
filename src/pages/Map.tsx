@@ -1,287 +1,322 @@
 
-import { useEffect, useState } from "react";
-import { Layout } from "../components/Layout";
+import { useState, useEffect, useRef } from "react";
+import { useAuth } from "@/lib/auth";
+import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { 
-  Car,
-  MapPin,
-  LocateFixed,
-  Route,
-  Layers,
-  Home,
-  MapPinned,
-  Building
-} from "lucide-react";
-import { getVehiclesByUser } from "@/lib/mock-data";
-import { Vehicle } from "@/lib/types";
+import { Input } from "@/components/ui/input";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { MapPin, Car, Search, LocateFixed } from "lucide-react";
+import { toast } from "sonner";
+
+interface Vehicle {
+  id: string;
+  name: string;
+  location: string | null;
+}
+
+interface LocationPoint {
+  id: string;
+  name: string;
+  latitude: number;
+  longitude: number;
+  type: "vehicle" | "favorite" | "marker";
+}
 
 const Map = () => {
+  const { user } = useAuth();
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
-  const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
   const [loading, setLoading] = useState(true);
+  const [locationPoints, setLocationPoints] = useState<LocationPoint[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [newLocationName, setNewLocationName] = useState("");
+  const [currentPosition, setCurrentPosition] = useState<{lat: number; lng: number} | null>(null);
+  const mapContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    if (!user) return;
+    
     const fetchVehicles = async () => {
       try {
-        // Получаем пользователя из локального хранилища
-        const storedUser = localStorage.getItem("user");
-        if (!storedUser) {
-          throw new Error("Пользователь не найден");
-        }
+        setLoading(true);
+        const { data, error } = await supabase
+          .from("vehicles")
+          .select("id, name, location")
+          .eq("user_id", user.id);
         
-        const user = JSON.parse(storedUser);
+        if (error) throw error;
         
-        // Получаем автомобили пользователя (в реальном приложении это будет API запрос)
-        const userVehicles = getVehiclesByUser(user.id);
-        setVehicles(userVehicles);
+        setVehicles(data || []);
         
-        // Выбираем первый автомобиль по умолчанию
-        if (userVehicles.length > 0) {
-          setSelectedVehicle(userVehicles[0]);
-        }
-      } catch (error) {
-        console.error("Ошибка при загрузке автомобилей:", error);
+        // Generate mock location points for vehicles
+        const mockPoints: LocationPoint[] = (data || []).map((vehicle, index) => ({
+          id: vehicle.id,
+          name: vehicle.name,
+          latitude: 55.751244 + (Math.random() * 0.05 - 0.025),
+          longitude: 37.618423 + (Math.random() * 0.05 - 0.025),
+          type: "vehicle"
+        }));
+        
+        // Add some favorite locations
+        const favoriteLocations: LocationPoint[] = [
+          {
+            id: "fav-1",
+            name: "Дом",
+            latitude: 55.7558,
+            longitude: 37.6173,
+            type: "favorite"
+          },
+          {
+            id: "fav-2",
+            name: "Работа",
+            latitude: 55.7439,
+            longitude: 37.5630,
+            type: "favorite"
+          }
+        ];
+        
+        setLocationPoints([...mockPoints, ...favoriteLocations]);
+      } catch (error: any) {
+        console.error("Ошибка при загрузке данных:", error);
+        toast.error("Не удалось загрузить данные для карты");
       } finally {
         setLoading(false);
       }
     };
-
+    
     fetchVehicles();
-  }, []);
+    
+    // Get current user location
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          setCurrentPosition({
+            lat: position.coords.latitude,
+            lng: position.coords.longitude
+          });
+        },
+        (error) => {
+          console.error("Error getting location:", error);
+          // Default to Moscow
+          setCurrentPosition({ lat: 55.751244, lng: 37.618423 });
+        }
+      );
+    } else {
+      // Default to Moscow if geolocation is not supported
+      setCurrentPosition({ lat: 55.751244, lng: 37.618423 });
+    }
+  }, [user]);
 
-  const handleSelectVehicle = (vehicle: Vehicle) => {
-    setSelectedVehicle(vehicle);
+  const addLocation = () => {
+    if (!newLocationName || !currentPosition) return;
+    
+    const newPoint: LocationPoint = {
+      id: `marker-${Date.now()}`,
+      name: newLocationName,
+      latitude: currentPosition.lat,
+      longitude: currentPosition.lng,
+      type: "marker"
+    };
+    
+    setLocationPoints([...locationPoints, newPoint]);
+    setNewLocationName("");
+    toast.success("Новая локация добавлена");
   };
 
-  if (loading) {
-    return (
-      <Layout>
-        <div className="flex justify-center items-center h-64">
-          <div className="text-gray-400 dark:text-gray-500">Загрузка...</div>
-        </div>
-      </Layout>
-    );
-  }
+  const filteredLocations = locationPoints.filter(point => 
+    point.name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   return (
-    <Layout>
-      <div className="space-y-6 animate-fade-in">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-          Карта автомобилей
-        </h1>
-
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-          {/* Левая боковая панель с автомобилями */}
-          <div className="lg:col-span-1 space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Ваши автомобили</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {vehicles.map((vehicle) => (
-                  <VehicleSelector
-                    key={vehicle.id}
-                    vehicle={vehicle}
-                    isSelected={selectedVehicle?.id === vehicle.id}
-                    onSelect={() => handleSelectVehicle(vehicle)}
+    <div className="container mx-auto py-6">
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold">Карта</h1>
+        <p className="text-gray-600 dark:text-gray-400 mt-1">
+          Отслеживайте местоположение ваших автомобилей и сохраняйте важные места
+        </p>
+      </div>
+      
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        {/* Sidebar with controls */}
+        <div className="md:col-span-1 space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center">
+                <Search className="mr-2 h-5 w-5 text-blue-500" />
+                Поиск
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <div className="relative">
+                  <Search className="absolute left-2 top-2.5 h-4 w-4 text-gray-500" />
+                  <Input
+                    placeholder="Найти место или автомобиль..."
+                    className="pl-8"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
                   />
-                ))}
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Сохраненные места</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <SavedLocation
-                  icon={<Home className="h-5 w-5" />}
-                  name="Дом"
-                  address="ул. Пушкина, д. 10"
-                />
-                <SavedLocation
-                  icon={<Building className="h-5 w-5" />}
-                  name="Работа"
-                  address="ул. Ленина, д. 25"
-                />
-                <SavedLocation
-                  icon={<MapPinned className="h-5 w-5" />}
-                  name="Дача"
-                  address="пос. Сосновка, ул. Лесная, д. 5"
-                />
-                <Button variant="outline" className="w-full mt-3">
-                  Добавить место
-                </Button>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Основная карта */}
-          <div className="lg:col-span-3">
-            <Card className="h-[calc(100vh-12rem)]">
-              <CardContent className="p-0 h-full relative">
-                <div className="w-full h-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
-                  <div className="text-center px-4">
-                    <MapPin className="h-12 w-12 text-gray-400 mx-auto mb-3" />
-                    <p className="text-gray-600 dark:text-gray-300 font-medium mb-1">
-                      Карта автомобилей будет доступна в ближайшем обновлении
-                    </p>
-                    <p className="text-gray-500 dark:text-gray-400 text-sm mb-4">
-                      Здесь вы сможете отслеживать местоположение всех ваших автомобилей
-                    </p>
-                    {selectedVehicle && selectedVehicle.location && (
-                      <div className="bg-white dark:bg-gray-800 p-3 rounded-lg inline-block">
-                        <p className="font-medium text-gray-900 dark:text-white">
-                          {selectedVehicle.make} {selectedVehicle.model}
-                        </p>
-                        <p className="text-sm text-gray-500 dark:text-gray-400">
-                          Координаты: {selectedVehicle.location.latitude.toFixed(6)},{" "}
-                          {selectedVehicle.location.longitude.toFixed(6)}
-                        </p>
+                </div>
+                
+                <div className="space-y-2 max-h-60 overflow-y-auto">
+                  {filteredLocations.length > 0 ? (
+                    filteredLocations.map((point) => (
+                      <div 
+                        key={point.id}
+                        className="flex items-center p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-md cursor-pointer"
+                        onClick={() => {
+                          toast.info(`Позиция на карте: ${point.name}`);
+                        }}
+                      >
+                        {point.type === "vehicle" ? (
+                          <Car className="h-4 w-4 mr-2 text-blue-500" />
+                        ) : point.type === "favorite" ? (
+                          <MapPin className="h-4 w-4 mr-2 text-red-500" />
+                        ) : (
+                          <MapPin className="h-4 w-4 mr-2 text-green-500" />
+                        )}
+                        <span>{point.name}</span>
                       </div>
-                    )}
+                    ))
+                  ) : (
+                    <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-2">
+                      Нет результатов
+                    </p>
+                  )}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center">
+                <LocateFixed className="mr-2 h-5 w-5 text-blue-500" />
+                Добавить локацию
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <Input
+                  placeholder="Название места"
+                  value={newLocationName}
+                  onChange={(e) => setNewLocationName(e.target.value)}
+                />
+                <Button 
+                  className="w-full bg-blue-500 hover:bg-blue-600"
+                  onClick={addLocation}
+                  disabled={!newLocationName || !currentPosition}
+                >
+                  <MapPin className="mr-2 h-4 w-4" />
+                  Добавить текущее место
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+          
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center">
+                <Car className="mr-2 h-5 w-5 text-blue-500" />
+                Мои автомобили
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {loading ? (
+                <div className="text-center py-4">
+                  <div className="animate-spin h-6 w-6 border-2 border-blue-500 border-opacity-30 border-t-blue-500 rounded-full mx-auto"></div>
+                </div>
+              ) : vehicles.length > 0 ? (
+                <div className="space-y-2">
+                  {vehicles.map((vehicle) => (
+                    <div 
+                      key={vehicle.id}
+                      className="flex items-center p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-md cursor-pointer"
+                      onClick={() => {
+                        toast.info(`Переход к автомобилю: ${vehicle.name}`);
+                      }}
+                    >
+                      <Car className="h-4 w-4 mr-2 text-blue-500" />
+                      <span>{vehicle.name}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-2">
+                  У вас пока нет автомобилей
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+        
+        {/* Map area */}
+        <div className="md:col-span-3">
+          <Card className="overflow-hidden h-[calc(100vh-12rem)]">
+            <div className="relative h-full">
+              {/* Map placeholder - will be replaced with actual map in real implementation */}
+              <div 
+                ref={mapContainerRef} 
+                className="absolute inset-0 bg-slate-200 dark:bg-slate-800 flex items-center justify-center"
+              >
+                <div className="text-center p-8">
+                  <h3 className="text-lg font-medium mb-4">Интерактивная карта</h3>
+                  <p className="mb-6 text-sm text-gray-600 dark:text-gray-400">
+                    Здесь будет отображаться карта для отслеживания автомобилей и отмеченных мест.
+                  </p>
+                  
+                  <div className="inline-flex items-center gap-4 text-sm">
+                    <div className="flex items-center">
+                      <div className="h-3 w-3 rounded-full bg-blue-500 mr-2"></div>
+                      <span>Автомобили</span>
+                    </div>
+                    <div className="flex items-center">
+                      <div className="h-3 w-3 rounded-full bg-red-500 mr-2"></div>
+                      <span>Избранное</span>
+                    </div>
+                    <div className="flex items-center">
+                      <div className="h-3 w-3 rounded-full bg-green-500 mr-2"></div>
+                      <span>Отметки</span>
+                    </div>
+                  </div>
+                  
+                  <div className="mt-8">
+                    <p className="text-gray-600 dark:text-gray-400 text-xs">
+                      Координаты: {currentPosition ? `${currentPosition.lat.toFixed(6)}, ${currentPosition.lng.toFixed(6)}` : 'Определение...'}
+                    </p>
                   </div>
                 </div>
-
-                {/* Элементы управления картой */}
-                <div className="absolute top-4 right-4 flex flex-col space-y-2">
-                  <Button variant="secondary" size="icon" className="bg-white dark:bg-gray-800 shadow-md">
-                    <LocateFixed className="h-5 w-5" />
-                  </Button>
-                  <Button variant="secondary" size="icon" className="bg-white dark:bg-gray-800 shadow-md">
-                    <Layers className="h-5 w-5" />
-                  </Button>
-                  <Button variant="secondary" size="icon" className="bg-white dark:bg-gray-800 shadow-md">
-                    <Route className="h-5 w-5" />
-                  </Button>
-                </div>
-
-                {/* Информация о выбранном автомобиле */}
-                {selectedVehicle && (
-                  <div className="absolute bottom-4 left-4 right-4">
-                    <Card className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm">
-                      <CardHeader className="py-3">
-                        <CardTitle className="text-base flex items-center">
-                          <Car className="h-5 w-5 mr-2" />
-                          {selectedVehicle.make} {selectedVehicle.model}
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent className="py-2">
-                        <div className="grid grid-cols-2 gap-4">
-                          <div>
-                            <p className="text-sm text-gray-500 dark:text-gray-400">
-                              Статус
-                            </p>
-                            <p className="font-medium">
-                              {selectedVehicle.status === "online" 
-                                ? "В сети" 
-                                : selectedVehicle.status === "offline"
-                                ? "Не в сети"
-                                : "На обслуживании"}
-                            </p>
-                          </div>
-                          <div>
-                            <p className="text-sm text-gray-500 dark:text-gray-400">
-                              Последнее обновление
-                            </p>
-                            <p className="font-medium">
-                              {selectedVehicle.location
-                                ? new Date(selectedVehicle.location.lastUpdated).toLocaleTimeString("ru-RU", {
-                                    hour: "2-digit",
-                                    minute: "2-digit",
-                                  })
-                                : "Неизвестно"}
-                            </p>
-                          </div>
-                        </div>
-                        <div className="flex space-x-3 mt-3">
-                          <Button size="sm" className="flex-1">
-                            Проложить маршрут
-                          </Button>
-                          <Button variant="outline" size="sm" className="flex-1">
-                            Подробнее
-                          </Button>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </div>
+              </div>
+              
+              {/* Controls overlay */}
+              <div className="absolute top-4 right-4 space-y-2">
+                <Button 
+                  size="icon" 
+                  variant="outline" 
+                  className="bg-white dark:bg-gray-800 h-10 w-10 rounded-full shadow-md"
+                  onClick={() => toast.info("Приближение карты")}
+                >
+                  <span className="text-lg font-bold">+</span>
+                </Button>
+                <Button 
+                  size="icon" 
+                  variant="outline" 
+                  className="bg-white dark:bg-gray-800 h-10 w-10 rounded-full shadow-md"
+                  onClick={() => toast.info("Отдаление карты")}
+                >
+                  <span className="text-lg font-bold">-</span>
+                </Button>
+                <Button 
+                  size="icon" 
+                  variant="outline" 
+                  className="bg-white dark:bg-gray-800 h-10 w-10 rounded-full shadow-md"
+                  onClick={() => toast.info("Показать текущее местоположение")}
+                >
+                  <LocateFixed className="h-5 w-5" />
+                </Button>
+              </div>
+            </div>
+          </Card>
         </div>
-      </div>
-    </Layout>
-  );
-};
-
-// Компоненты
-
-interface VehicleSelectorProps {
-  vehicle: Vehicle;
-  isSelected: boolean;
-  onSelect: () => void;
-}
-
-const VehicleSelector = ({ vehicle, isSelected, onSelect }: VehicleSelectorProps) => {
-  return (
-    <div
-      className={`p-3 rounded-lg cursor-pointer transition-colors ${
-        isSelected
-          ? "bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800"
-          : "bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 border border-transparent"
-      }`}
-      onClick={onSelect}
-    >
-      <div className="flex items-center">
-        <div className="flex-shrink-0 mr-3">
-          <div className="h-10 w-10 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
-            <Car className="h-5 w-5 text-gray-500 dark:text-gray-400" />
-          </div>
-        </div>
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
-            {vehicle.make} {vehicle.model}
-          </p>
-          <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
-            {vehicle.licensePlate}
-          </p>
-        </div>
-        <div
-          className={`h-2 w-2 rounded-full ${
-            vehicle.status === "online"
-              ? "bg-green-500"
-              : vehicle.status === "maintenance"
-              ? "bg-yellow-500"
-              : "bg-gray-500"
-          }`}
-        ></div>
-      </div>
-    </div>
-  );
-};
-
-interface SavedLocationProps {
-  icon: React.ReactNode;
-  name: string;
-  address: string;
-}
-
-const SavedLocation = ({ icon, name, address }: SavedLocationProps) => {
-  return (
-    <div className="flex items-center p-2 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-md cursor-pointer">
-      <div className="p-2 rounded-full bg-gray-100 dark:bg-gray-700 mr-3">
-        {icon}
-      </div>
-      <div>
-        <p className="font-medium text-gray-900 dark:text-white">{name}</p>
-        <p className="text-xs text-gray-500 dark:text-gray-400">{address}</p>
       </div>
     </div>
   );

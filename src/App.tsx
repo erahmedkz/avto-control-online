@@ -8,7 +8,7 @@ import { useEffect } from "react";
 import { AuthProvider } from "@/lib/auth";
 import { Layout } from "@/components/Layout";
 
-// Страницы
+// Pages
 import Index from "./pages/Index";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
@@ -30,13 +30,13 @@ const queryClient = new QueryClient({
 });
 
 const App = () => {
-  // Проверка темы при запуске приложения
+  // Check theme on app start
   useEffect(() => {
     const savedTheme = localStorage.getItem("theme") as "light" | "dark" | null;
     if (savedTheme) {
       document.documentElement.classList.add(savedTheme);
     } else {
-      // Если тема не сохранена, проверяем системные настройки
+      // If theme is not saved, check system settings
       if (window.matchMedia("(prefers-color-scheme: dark)").matches) {
         document.documentElement.classList.add("dark");
       } else {
@@ -56,54 +56,15 @@ const App = () => {
               <Route path="/" element={<Index />} />
               <Route path="/login" element={<Login />} />
               <Route path="/register" element={<Register />} />
-              <Route 
-                path="/dashboard" 
-                element={
-                  <Layout>
-                    <Dashboard />
-                  </Layout>
-                } 
-              />
-              <Route 
-                path="/vehicles" 
-                element={
-                  <Layout>
-                    <VehiclesList />
-                  </Layout>
-                } 
-              />
-              <Route 
-                path="/vehicles/:id" 
-                element={
-                  <Layout>
-                    <VehicleDetail />
-                  </Layout>
-                } 
-              />
-              <Route 
-                path="/control/:id" 
-                element={
-                  <Layout>
-                    <VehicleControl />
-                  </Layout>
-                } 
-              />
-              <Route 
-                path="/profile" 
-                element={
-                  <Layout>
-                    <Profile />
-                  </Layout>
-                } 
-              />
-              <Route 
-                path="/map" 
-                element={
-                  <Layout>
-                    <Map />
-                  </Layout>
-                } 
-              />
+              
+              {/* Protected routes with Layout */}
+              <Route path="/dashboard" element={<Dashboard />} />
+              <Route path="/vehicles" element={<VehiclesList />} />
+              <Route path="/vehicles/:id" element={<VehicleDetail />} />
+              <Route path="/control/:id" element={<VehicleControl />} />
+              <Route path="/profile" element={<Profile />} />
+              <Route path="/map" element={<Map />} />
+              
               <Route path="*" element={<NotFound />} />
             </Routes>
           </AuthProvider>

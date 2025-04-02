@@ -1,611 +1,483 @@
 
-import { useEffect, useState } from "react";
-import { useParams, Link } from "react-router-dom";
-import { Layout } from "../components/Layout";
+import { useState, useEffect } from "react";
+import { useParams, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
-import { Progress } from "@/components/ui/progress";
 import {
   Car,
-  Battery,
-  Fuel,
-  Gauge,
+  Settings,
   Calendar,
-  Thermometer,
-  Lock,
-  Unlock,
-  AlertTriangle,
-  MapPin,
   Clock,
-  ArrowLeft,
+  Fuel,
+  Map as MapIcon,
+  BarChart3,
+  Wrench,
+  Check,
+  AlertTriangle,
+  History
 } from "lucide-react";
-import { Vehicle, Alert } from "@/lib/types";
-import { getVehicle, getAlertsByVehicle } from "@/lib/mock-data";
+import { useAuth } from "@/lib/auth";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
+
+interface VehicleDetails {
+  id: string;
+  name: string;
+  model: string;
+  year: number;
+  color?: string;
+  status?: string;
+  licensePlate?: string;
+  batteryLevel?: number;
+  fuelLevel?: number;
+  mileage?: number;
+  lastService?: {
+    date: string;
+    type: string;
+  };
+  image?: string;
+  location?: string;
+  lastUpdate?: string;
+}
 
 const VehicleDetail = () => {
   const { id } = useParams<{ id: string }>();
-  const [vehicle, setVehicle] = useState<Vehicle | null>(null);
-  const [alerts, setAlerts] = useState<Alert[]>([]);
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const [vehicle, setVehicle] = useState<VehicleDetails | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editedVehicle, setEditedVehicle] = useState<Partial<VehicleDetails>>({});
 
   useEffect(() => {
-    const fetchVehicleData = async () => {
+    if (!id || !user) return;
+    
+    const fetchVehicleDetails = async () => {
       try {
-        if (!id) return;
-
-        // В реальном приложении это будет API запрос
-        const vehicleData = getVehicle(id);
-        const vehicleAlerts = getAlertsByVehicle(id);
-
-        if (vehicleData) {
+        setLoading(true);
+        const { data, error } = await supabase
+          .from("vehicles")
+          .select("*")
+          .eq("id", id)
+          .eq("user_id", user.id)
+          .single();
+        
+        if (error) throw error;
+        
+        if (data) {
+          // Transform data for UI
+          const vehicleData: VehicleDetails = {
+            id: data.id,
+            name: data.name,
+            model: data.model,
+            year: data.year,
+            color: data.color || "Не указан",
+            status: data.status || "offline",
+            licensePlate: "А123БВ77", // Default
+            batteryLevel: 85,
+            fuelLevel: 65,
+            mileage: 28500,
+            lastService: {
+              date: new Date().toISOString(),
+              type: "ТО-1"
+            },
+            image: "https://images.unsplash.com/photo-1533473359331-0135ef1b58bf?q=80&w=1000&auto=format&fit=crop",
+            location: "Москва, ул. Ленина 12",
+            lastUpdate: data.last_updated || new Date().toISOString()
+          };
+          
           setVehicle(vehicleData);
-          setAlerts(vehicleAlerts);
+          setEditedVehicle(vehicleData);
         }
-      } catch (error) {
-        console.error("Ошибка при загрузке данных автомобиля:", error);
+      } catch (error: any) {
+        console.error("Error fetching vehicle details:", error);
+        toast.error("Не удалось загрузить данные автомобиля", {
+          action: {
+            label: "Вернуться к списку",
+            onClick: () => navigate("/vehicles")
+          }
+        });
       } finally {
         setLoading(false);
       }
     };
+    
+    fetchVehicleDetails();
+  }, [id, user, navigate]);
 
-    fetchVehicleData();
-  }, [id]);
+  const handleEditToggle = () => {
+    if (isEditing) {
+      // Save changes
+      saveVehicleChanges();
+    }
+    setIsEditing(!isEditing);
+  };
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setEditedVehicle({
+      ...editedVehicle,
+      [name]: value
+    });
+  };
+
+  const saveVehicleChanges = async () => {
+    if (!id || !user || !vehicle) return;
+    
+    try {
+      const { error } = await supabase
+        .from("vehicles")
+        .update({
+          name: editedVehicle.name,
+          model: editedVehicle.model,
+          year: editedVehicle.year,
+          color: editedVehicle.color,
+          last_updated: new Date().toISOString()
+        })
+        .eq("id", id)
+        .eq("user_id", user.id);
+      
+      if (error) throw error;
+      
+      setVehicle({
+        ...vehicle,
+        ...editedVehicle,
+        lastUpdate: new Date().toISOString()
+      });
+      
+      toast.success("Данные автомобиля обновлены");
+    } catch (error: any) {
+      console.error("Error updating vehicle:", error);
+      toast.error("Не удалось обновить данные автомобиля");
+    }
+  };
 
   if (loading) {
     return (
-      <Layout>
-        <div className="flex justify-center items-center h-64">
-          <div className="text-gray-400 dark:text-gray-500">Загрузка...</div>
-        </div>
-      </Layout>
+      <div className="flex justify-center items-center py-20">
+        <div className="animate-spin h-10 w-10 border-4 border-primary border-opacity-30 border-t-primary rounded-full"></div>
+      </div>
     );
   }
 
   if (!vehicle) {
     return (
-      <Layout>
-        <div className="text-center py-12">
-          <h2 className="text-xl font-semibold text-gray-800 dark:text-white mb-4">
-            Автомобиль не найден
-          </h2>
-          <Link to="/vehicles">
-            <Button>Вернуться к списку</Button>
-          </Link>
-        </div>
-      </Layout>
+      <div className="text-center my-10">
+        <AlertTriangle className="h-16 w-16 text-yellow-500 mx-auto mb-4" />
+        <h2 className="text-2xl font-bold text-gray-800 dark:text-white mb-4">Автомобиль не найден</h2>
+        <p className="text-gray-600 dark:text-gray-400 mb-6">Запрашиваемый автомобиль не существует или у вас нет к нему доступа.</p>
+        <Button onClick={() => navigate("/vehicles")}>
+          Вернуться к списку автомобилей
+        </Button>
+      </div>
     );
   }
 
   return (
-    <Layout>
-      <div className="space-y-6 animate-fade-in">
-        <div className="flex items-center mb-4">
-          <Link to="/vehicles" className="mr-4">
-            <Button variant="ghost" size="icon">
-              <ArrowLeft className="h-5 w-5" />
-            </Button>
-          </Link>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-            {vehicle.make} {vehicle.model}
-          </h1>
-          <StatusBadge status={vehicle.status} className="ml-3" />
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Левая колонка с изображением и основной информацией */}
-          <div className="lg:col-span-2 space-y-6">
-            <Card className="overflow-hidden">
-              <div className="h-64 md:h-80 overflow-hidden">
-                <img
-                  src={vehicle.image || "https://via.placeholder.com/800x400"}
-                  alt={`${vehicle.make} ${vehicle.model}`}
-                  className="w-full h-full object-cover"
+    <div className="container mx-auto px-4 py-6">
+      <div className="flex flex-col md:flex-row md:items-start md:gap-8">
+        {/* Vehicle Image & Primary Info */}
+        <div className="md:w-1/3 mb-6 md:mb-0">
+          <Card className="overflow-hidden">
+            <div className="h-60 bg-gradient-to-r from-blue-500 to-purple-600 relative">
+              {vehicle.image ? (
+                <img 
+                  src={vehicle.image} 
+                  alt={vehicle.name} 
+                  className="w-full h-full object-cover mix-blend-overlay"
                 />
-              </div>
-              <CardContent className="pt-6">
-                <h2 className="text-xl font-semibold text-gray-800 dark:text-white mb-4">
-                  Основная информация
-                </h2>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
-                  <InfoItem
-                    icon={<Car className="h-5 w-5" />}
-                    label="Модель"
-                    value={`${vehicle.make} ${vehicle.model}`}
-                  />
-                  <InfoItem
-                    icon={<Calendar className="h-5 w-5" />}
-                    label="Год выпуска"
-                    value={vehicle.year.toString()}
-                  />
-                  <InfoItem
-                    icon={<Gauge className="h-5 w-5" />}
-                    label="Пробег"
-                    value={`${vehicle.mileage} км`}
-                  />
-                  <InfoItem
-                    icon={<Car className="h-5 w-5" />}
-                    label="Гос. номер"
-                    value={vehicle.licensePlate}
-                  />
-                  <InfoItem
-                    icon={<Calendar className="h-5 w-5" />}
-                    label="Цвет"
-                    value={vehicle.color}
-                  />
-                  <InfoItem
-                    icon={<Lock className="h-5 w-5" />}
-                    label="Статус дверей"
-                    value={vehicle.doors.locked ? "Заблокированы" : "Открыты"}
-                  />
+              ) : (
+                <div className="flex items-center justify-center h-full">
+                  <Car className="h-20 w-20 text-white/70" />
                 </div>
-              </CardContent>
-            </Card>
-
-            <Tabs defaultValue="status">
-              <TabsList className="grid grid-cols-3 mb-4">
-                <TabsTrigger value="status">Состояние</TabsTrigger>
-                <TabsTrigger value="history">История</TabsTrigger>
-                <TabsTrigger value="service">Обслуживание</TabsTrigger>
-              </TabsList>
-              <TabsContent value="status">
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Текущее состояние</CardTitle>
-                    <CardDescription>
-                      Актуальная информация о состоянии автомобиля
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-6">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <div className="space-y-3">
-                        <h3 className="font-medium text-gray-800 dark:text-white flex items-center">
-                          <Battery className="mr-2 h-5 w-5" />
-                          Батарея
-                        </h3>
-                        <Progress value={vehicle.batteryLevel} className="h-2" />
-                        <p className="text-sm text-gray-600 dark:text-gray-300">
-                          {vehicle.batteryLevel}% заряда
-                        </p>
-                      </div>
-                      <div className="space-y-3">
-                        <h3 className="font-medium text-gray-800 dark:text-white flex items-center">
-                          <Fuel className="mr-2 h-5 w-5" />
-                          Топливо
-                        </h3>
-                        <Progress value={vehicle.fuelLevel} className="h-2" />
-                        <p className="text-sm text-gray-600 dark:text-gray-300">
-                          {vehicle.fuelLevel}% топлива
-                        </p>
-                      </div>
-                    </div>
-
-                    <Separator />
-
-                    <div>
-                      <h3 className="font-medium text-gray-800 dark:text-white mb-3">
-                        Климат-контроль
-                      </h3>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="bg-gray-100 dark:bg-gray-700 rounded-lg p-4 flex items-center">
-                          <Thermometer className="mr-3 h-5 w-5 text-gray-600 dark:text-gray-300" />
-                          <div>
-                            <p className="text-sm text-gray-600 dark:text-gray-300">
-                              Температура
-                            </p>
-                            <p className="font-medium">
-                              {vehicle.climate.temperature}°C
-                            </p>
-                          </div>
-                        </div>
-                        <div className="bg-gray-100 dark:bg-gray-700 rounded-lg p-4">
-                          <p className="text-sm text-gray-600 dark:text-gray-300">
-                            Статус
-                          </p>
-                          <p className="font-medium">
-                            {vehicle.climate.isOn ? "Включен" : "Выключен"}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-
-                    <Separator />
-
-                    <div>
-                      <h3 className="font-medium text-gray-800 dark:text-white mb-3">
-                        Двигатель
-                      </h3>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="bg-gray-100 dark:bg-gray-700 rounded-lg p-4">
-                          <p className="text-sm text-gray-600 dark:text-gray-300">
-                            Статус
-                          </p>
-                          <p className="font-medium">
-                            {vehicle.engine.isOn ? "Запущен" : "Выключен"}
-                          </p>
-                        </div>
-                        {vehicle.engine.temperature !== undefined && (
-                          <div className="bg-gray-100 dark:bg-gray-700 rounded-lg p-4 flex items-center">
-                            <Thermometer className="mr-3 h-5 w-5 text-gray-600 dark:text-gray-300" />
-                            <div>
-                              <p className="text-sm text-gray-600 dark:text-gray-300">
-                                Температура
-                              </p>
-                              <p className="font-medium">
-                                {vehicle.engine.temperature}°C
-                              </p>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    <Separator />
-
-                    <div>
-                      <h3 className="font-medium text-gray-800 dark:text-white mb-3">
-                        Состояние дверей
-                      </h3>
-                      <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                        <DoorStatus
-                          label="Передняя левая"
-                          isOpen={vehicle.doors.frontLeftOpen}
-                          isLocked={vehicle.doors.locked}
-                        />
-                        <DoorStatus
-                          label="Передняя правая"
-                          isOpen={vehicle.doors.frontRightOpen}
-                          isLocked={vehicle.doors.locked}
-                        />
-                        <DoorStatus
-                          label="Задняя левая"
-                          isOpen={vehicle.doors.rearLeftOpen}
-                          isLocked={vehicle.doors.locked}
-                        />
-                        <DoorStatus
-                          label="Задняя правая"
-                          isOpen={vehicle.doors.rearRightOpen}
-                          isLocked={vehicle.doors.locked}
-                        />
-                        <DoorStatus
-                          label="Багажник"
-                          isOpen={vehicle.doors.trunkOpen}
-                          isLocked={vehicle.doors.locked}
-                        />
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              </TabsContent>
-
-              <TabsContent value="history">
-                <Card>
-                  <CardHeader>
-                    <CardTitle>История поездок</CardTitle>
-                    <CardDescription>
-                      Информация о недавних поездках
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="py-8 text-center text-gray-500 dark:text-gray-400">
-                      История поездок будет доступна в ближайшем обновлении
-                    </p>
-                  </CardContent>
-                </Card>
-              </TabsContent>
-
-              <TabsContent value="service">
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Техническое обслуживание</CardTitle>
-                    <CardDescription>
-                      История и план технического обслуживания
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-6">
-                    {vehicle.lastService ? (
-                      <>
-                        <div>
-                          <h3 className="font-medium text-gray-800 dark:text-white mb-3">
-                            Последнее ТО
-                          </h3>
-                          <div className="bg-gray-100 dark:bg-gray-700 rounded-lg p-4 space-y-2">
-                            <div className="flex justify-between">
-                              <p className="text-sm text-gray-600 dark:text-gray-300">
-                                Дата
-                              </p>
-                              <p className="font-medium">
-                                {new Date(
-                                  vehicle.lastService.date
-                                ).toLocaleDateString("ru-RU")}
-                              </p>
-                            </div>
-                            <div className="flex justify-between">
-                              <p className="text-sm text-gray-600 dark:text-gray-300">
-                                Пробег
-                              </p>
-                              <p className="font-medium">
-                                {vehicle.lastService.mileage} км
-                              </p>
-                            </div>
-                            <div className="flex justify-between">
-                              <p className="text-sm text-gray-600 dark:text-gray-300">
-                                Тип
-                              </p>
-                              <p className="font-medium">
-                                {vehicle.lastService.type}
-                              </p>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div>
-                          <h3 className="font-medium text-gray-800 dark:text-white mb-3">
-                            Следующее ТО
-                          </h3>
-                          <div className="bg-gray-100 dark:bg-gray-700 rounded-lg p-4 space-y-2">
-                            <div className="flex justify-between">
-                              <p className="text-sm text-gray-600 dark:text-gray-300">
-                                Рекомендуемый пробег
-                              </p>
-                              <p className="font-medium">
-                                {vehicle.lastService.mileage + 10000} км
-                              </p>
-                            </div>
-                            <div className="flex justify-between">
-                              <p className="text-sm text-gray-600 dark:text-gray-300">
-                                Осталось
-                              </p>
-                              <p className="font-medium">
-                                {vehicle.lastService.mileage + 10000 - vehicle.mileage} км
-                              </p>
-                            </div>
-                          </div>
-                        </div>
-                      </>
-                    ) : (
-                      <p className="text-center py-4 text-gray-500 dark:text-gray-400">
-                        Нет информации о техническом обслуживании
-                      </p>
-                    )}
-
-                    <div className="flex justify-center pt-4">
-                      <Button>
-                        Запланировать ТО
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              </TabsContent>
-            </Tabs>
-          </div>
-
-          {/* Правая боковая колонка с местоположением и оповещениями */}
-          <div className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Местоположение</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {vehicle.location ? (
+              )}
+            </div>
+            <CardContent className="p-6">
+              <div className="space-y-4">
+                {isEditing ? (
                   <>
-                    <div className="h-64 bg-gray-200 dark:bg-gray-700 rounded-lg flex items-center justify-center">
-                      <div className="text-center">
-                        <MapPin className="h-8 w-8 text-gray-500 dark:text-gray-400 mx-auto mb-2" />
-                        <p className="text-sm text-gray-600 dark:text-gray-300">
-                          Карта будет доступна в ближайшем обновлении
-                        </p>
-                      </div>
+                    <div>
+                      <label className="text-sm text-gray-500 dark:text-gray-400">Название</label>
+                      <input
+                        type="text"
+                        name="name"
+                        value={editedVehicle.name}
+                        onChange={handleInputChange}
+                        className="w-full p-2 border rounded mt-1 dark:bg-gray-700 dark:border-gray-600"
+                      />
                     </div>
-                    <div className="space-y-3">
-                      <div className="flex justify-between">
-                        <p className="text-sm text-gray-600 dark:text-gray-300">
-                          Координаты
-                        </p>
-                        <p className="font-medium">
-                          {vehicle.location.latitude.toFixed(6)},{" "}
-                          {vehicle.location.longitude.toFixed(6)}
-                        </p>
-                      </div>
-                      <div className="flex justify-between">
-                        <p className="text-sm text-gray-600 dark:text-gray-300">
-                          Последнее обновление
-                        </p>
-                        <p className="font-medium flex items-center">
-                          <Clock className="h-4 w-4 mr-1" />
-                          {new Date(
-                            vehicle.location.lastUpdated
-                          ).toLocaleTimeString("ru-RU", {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
-                        </p>
-                      </div>
+                    <div>
+                      <label className="text-sm text-gray-500 dark:text-gray-400">Модель</label>
+                      <input
+                        type="text"
+                        name="model"
+                        value={editedVehicle.model}
+                        onChange={handleInputChange}
+                        className="w-full p-2 border rounded mt-1 dark:bg-gray-700 dark:border-gray-600"
+                      />
                     </div>
-                    <div className="pt-2">
-                      <Button variant="outline" className="w-full">
-                        <MapPin className="h-4 w-4 mr-2" />
-                        На карте
-                      </Button>
+                    <div>
+                      <label className="text-sm text-gray-500 dark:text-gray-400">Год выпуска</label>
+                      <input
+                        type="number"
+                        name="year"
+                        value={editedVehicle.year}
+                        onChange={handleInputChange}
+                        className="w-full p-2 border rounded mt-1 dark:bg-gray-700 dark:border-gray-600"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-sm text-gray-500 dark:text-gray-400">Цвет</label>
+                      <input
+                        type="text"
+                        name="color"
+                        value={editedVehicle.color}
+                        onChange={handleInputChange}
+                        className="w-full p-2 border rounded mt-1 dark:bg-gray-700 dark:border-gray-600"
+                      />
                     </div>
                   </>
                 ) : (
-                  <div className="text-center py-8">
-                    <p className="text-gray-500 dark:text-gray-400">
-                      Нет данных о местоположении
-                    </p>
-                  </div>
+                  <>
+                    <div>
+                      <h2 className="text-2xl font-bold">{vehicle.name}</h2>
+                      <p className="text-gray-600 dark:text-gray-400">{vehicle.model}, {vehicle.year}</p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {getStatusBadge(vehicle.status)}
+                      <Badge variant="outline" className="bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400">
+                        {vehicle.color}
+                      </Badge>
+                    </div>
+                    <div className="pt-2 border-t">
+                      <p className="text-sm text-gray-600 dark:text-gray-400">
+                        Последнее обновление:
+                      </p>
+                      <p className="text-sm font-medium">
+                        {new Date(vehicle.lastUpdate!).toLocaleString('ru-RU')}
+                      </p>
+                    </div>
+                  </>
                 )}
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Оповещения</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {alerts.length > 0 ? (
-                  <div className="space-y-3">
-                    {alerts.map((alert) => (
-                      <AlertItem key={alert.id} alert={alert} />
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-center py-8">
-                    <p className="text-gray-500 dark:text-gray-400">
-                      Нет активных оповещений
-                    </p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Быстрые действия</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <Link to={`/control/${vehicle.id}`} className="w-full">
-                  <Button className="w-full">
-                    Управление автомобилем
+                
+                <div className="pt-4">
+                  <Button 
+                    onClick={handleEditToggle} 
+                    className="w-full"
+                  >
+                    {isEditing ? (
+                      <>
+                        <Check className="mr-2 h-4 w-4" />
+                        Сохранить изменения
+                      </>
+                    ) : (
+                      <>
+                        <Settings className="mr-2 h-4 w-4" />
+                        Редактировать данные
+                      </>
+                    )}
                   </Button>
-                </Link>
-                <Button variant="outline" className="w-full">
-                  <Lock className="h-4 w-4 mr-2" />
-                  {vehicle.doors.locked ? "Разблокировать двери" : "Заблокировать двери"}
-                </Button>
-                <Button variant="outline" className="w-full">
-                  Диагностика
-                </Button>
-              </CardContent>
-            </Card>
-          </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Vehicle Details */}
+        <div className="md:w-2/3">
+          <Tabs defaultValue="info" className="w-full">
+            <TabsList className="grid grid-cols-3 mb-6">
+              <TabsTrigger value="info">Информация</TabsTrigger>
+              <TabsTrigger value="stats">Статистика</TabsTrigger>
+              <TabsTrigger value="service">Обслуживание</TabsTrigger>
+            </TabsList>
+            
+            <TabsContent value="info" className="space-y-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg flex items-center">
+                    <Car className="mr-2 h-5 w-5 text-blue-500" />
+                    Основная информация
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <InfoItem label="Гос. номер" value={vehicle.licensePlate || "Не указан"} />
+                    <InfoItem label="Пробег" value={`${vehicle.mileage?.toLocaleString() || 0} км`} />
+                    <InfoItem label="Статус" value={getStatusText(vehicle.status)} />
+                    <InfoItem label="Местоположение" value={vehicle.location || "Не определено"} />
+                  </div>
+                </CardContent>
+              </Card>
+              
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg flex items-center">
+                    <Fuel className="mr-2 h-5 w-5 text-blue-500" />
+                    Топливо и энергия
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <InfoItem 
+                      label="Уровень топлива" 
+                      value={`${vehicle.fuelLevel || 0}%`}
+                      progressValue={vehicle.fuelLevel || 0}
+                    />
+                    <InfoItem 
+                      label="Заряд батареи" 
+                      value={`${vehicle.batteryLevel || 0}%`}
+                      progressValue={vehicle.batteryLevel || 0}
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+              
+              <Button 
+                onClick={() => navigate(`/control/${vehicle.id}`)}
+                className="w-full bg-blue-500 hover:bg-blue-600"
+              >
+                <Settings className="mr-2 h-5 w-5" />
+                Перейти к управлению
+              </Button>
+            </TabsContent>
+            
+            <TabsContent value="stats" className="space-y-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg flex items-center">
+                    <BarChart3 className="mr-2 h-5 w-5 text-blue-500" />
+                    Статистика использования
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-center py-8">
+                    <p className="text-gray-600 dark:text-gray-400">Статистика поездок будет доступна после начала использования автомобиля в системе</p>
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+            
+            <TabsContent value="service" className="space-y-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg flex items-center">
+                    <Wrench className="mr-2 h-5 w-5 text-blue-500" />
+                    История обслуживания
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="border-l-2 border-blue-500 pl-4 space-y-6">
+                    <div className="relative">
+                      <div className="absolute -left-6 top-0 h-4 w-4 rounded-full bg-blue-500"></div>
+                      <h3 className="text-lg font-medium">ТО-1</h3>
+                      <p className="text-sm text-gray-600 dark:text-gray-400">
+                        {new Date().toLocaleDateString('ru-RU')}
+                      </p>
+                      <p className="mt-2">
+                        Плановое техническое обслуживание. Замена масла, фильтров.
+                      </p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+              
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg flex items-center">
+                    <Calendar className="mr-2 h-5 w-5 text-blue-500" />
+                    Планирование обслуживания
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-center py-4">
+                    <Button variant="outline" className="mb-2">
+                      Запланировать ТО
+                    </Button>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                      Следующее ТО рекомендуется через 5000 км или 3 месяца
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+          </Tabs>
         </div>
       </div>
-    </Layout>
+    </div>
   );
 };
 
-// Компоненты
-
-interface StatusBadgeProps {
-  status: "online" | "offline" | "maintenance";
-  className?: string;
+function InfoItem({ 
+  label, 
+  value, 
+  progressValue 
+}: { 
+  label: string; 
+  value: string; 
+  progressValue?: number 
+}) {
+  return (
+    <div className="space-y-2">
+      <div className="flex justify-between items-center">
+        <span className="text-sm text-gray-600 dark:text-gray-400">{label}</span>
+        <span className="font-medium">{value}</span>
+      </div>
+      {progressValue !== undefined && (
+        <div className="h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+          <div 
+            className="h-full bg-blue-500 rounded-full"
+            style={{ width: `${progressValue}%` }}
+          ></div>
+        </div>
+      )}
+    </div>
+  );
 }
 
-const StatusBadge = ({ status, className }: StatusBadgeProps) => {
-  let badgeProps = {};
-
+function getStatusBadge(status?: string) {
   switch (status) {
     case "online":
-      badgeProps = { className: "bg-green-500" };
-      break;
+      return <Badge className="bg-green-500">В сети</Badge>;
     case "offline":
-      badgeProps = { variant: "outline", className: "text-gray-500" };
-      break;
+      return <Badge variant="outline" className="text-gray-500">Не в сети</Badge>;
+    case "Running":
+      return <Badge className="bg-green-500">Запущен</Badge>;
+    case "Parked":
+      return <Badge variant="outline" className="text-gray-500">Припаркован</Badge>;
+    case "Locked":
+      return <Badge variant="outline" className="text-blue-500">Заблокирован</Badge>;
     case "maintenance":
-      badgeProps = { className: "bg-yellow-500" };
-      break;
+      return <Badge variant="secondary" className="bg-yellow-500 text-white">На обслуживании</Badge>;
+    default:
+      return <Badge variant="outline">Неизвестно</Badge>;
   }
-
-  const statusText = {
-    online: "В сети",
-    offline: "Не в сети",
-    maintenance: "На обслуживании",
-  };
-
-  return (
-    <Badge {...badgeProps} className={className}>
-      {statusText[status]}
-    </Badge>
-  );
-};
-
-interface InfoItemProps {
-  icon: React.ReactNode;
-  label: string;
-  value: string;
 }
 
-const InfoItem = ({ icon, label, value }: InfoItemProps) => {
-  return (
-    <div className="flex items-start">
-      <div className="p-2 rounded-full bg-gray-100 dark:bg-gray-700 mr-3">
-        {icon}
-      </div>
-      <div>
-        <p className="text-xs text-gray-500 dark:text-gray-400">{label}</p>
-        <p className="font-medium">{value}</p>
-      </div>
-    </div>
-  );
-};
-
-interface DoorStatusProps {
-  label: string;
-  isOpen: boolean;
-  isLocked: boolean;
+function getStatusText(status?: string): string {
+  switch (status) {
+    case "online":
+      return "В сети";
+    case "offline":
+      return "Не в сети";
+    case "Running":
+      return "Запущен";
+    case "Parked":
+      return "Припаркован";
+    case "Locked":
+      return "Заблокирован";
+    case "maintenance":
+      return "На обслуживании";
+    default:
+      return "Неизвестно";
+  }
 }
-
-const DoorStatus = ({ label, isOpen, isLocked }: DoorStatusProps) => {
-  return (
-    <div className="bg-gray-100 dark:bg-gray-700 rounded-lg p-3">
-      <p className="text-sm text-gray-600 dark:text-gray-300 mb-1">{label}</p>
-      <div className="flex items-center">
-        {isLocked ? (
-          <Lock className="h-4 w-4 text-green-500 mr-1.5" />
-        ) : (
-          <Unlock className="h-4 w-4 text-yellow-500 mr-1.5" />
-        )}
-        <p className="font-medium">
-          {isOpen ? "Открыта" : isLocked ? "Заблокирована" : "Закрыта"}
-        </p>
-      </div>
-    </div>
-  );
-};
-
-interface AlertItemProps {
-  alert: Alert;
-}
-
-const AlertItem = ({ alert }: AlertItemProps) => {
-  const alertTypeIcons = {
-    warning: <AlertTriangle className="h-5 w-5 text-yellow-500" />,
-    error: <AlertTriangle className="h-5 w-5 text-red-500" />,
-    info: <AlertTriangle className="h-5 w-5 text-blue-500" />,
-  };
-
-  const formattedDate = new Date(alert.timestamp).toLocaleString("ru-RU", {
-    day: "numeric",
-    month: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-
-  return (
-    <div
-      className={`flex items-start p-3 rounded-md ${
-        alert.read ? "bg-transparent" : "bg-blue-50 dark:bg-blue-900/20"
-      }`}
-    >
-      <div className="mr-3">{alertTypeIcons[alert.type]}</div>
-      <div className="flex-1">
-        <p className="text-sm font-medium">{alert.message}</p>
-        <p className="text-xs text-gray-500 dark:text-gray-400">
-          {formattedDate}
-        </p>
-      </div>
-    </div>
-  );
-};
 
 export default VehicleDetail;
