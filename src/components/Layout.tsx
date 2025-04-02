@@ -1,4 +1,3 @@
-
 import { ReactNode, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { ThemeToggle } from "./ThemeToggle";
@@ -11,6 +10,7 @@ import {
   Settings, 
   Bell 
 } from "lucide-react";
+import { useAuth } from "@/lib/auth";
 
 type LayoutProps = {
   children: ReactNode;
@@ -18,27 +18,27 @@ type LayoutProps = {
 
 export function Layout({ children }: LayoutProps) {
   const location = useLocation();
-  const isAuthenticated = localStorage.getItem("isAuthenticated") === "true";
+  const { user, signOut } = useAuth();
   
   // Проверка аутентификации
   useEffect(() => {
     const protectedRoutes = ["/dashboard", "/profile", "/vehicles", "/control", "/settings"];
     const isProtectedRoute = protectedRoutes.some(route => location.pathname.startsWith(route));
     
-    if (isProtectedRoute && !isAuthenticated) {
+    if (isProtectedRoute && !user) {
       window.location.href = "/login";
     }
-  }, [location, isAuthenticated]);
+  }, [location, user]);
 
   // Если пользователь не авторизован, показываем только основной контент
-  if (!isAuthenticated && location.pathname !== "/" && location.pathname !== "/login" && location.pathname !== "/register") {
+  if (!user && location.pathname !== "/" && location.pathname !== "/login" && location.pathname !== "/register") {
     return <div className="min-h-screen">{children}</div>;
   }
 
   return (
     <div className="flex min-h-screen bg-gray-100 dark:bg-gray-900">
-      {/* Боковая навигация - только для авторизованных пользователей */}
-      {isAuthenticated && (
+      {/* Боковая навигация - только для авторизованных пол��зователей */}
+      {user && (
         <nav className="w-20 md:w-64 bg-white dark:bg-gray-800 shadow-md">
           <div className="px-4 py-6">
             <h2 className="text-xl font-bold text-car-blue dark:text-white hidden md:block">
@@ -83,10 +83,8 @@ export function Layout({ children }: LayoutProps) {
             
             <div className="absolute bottom-4 left-0 w-20 md:w-64 px-4">
               <button 
-                onClick={() => {
-                  localStorage.removeItem("isAuthenticated");
-                  localStorage.removeItem("user");
-                  window.location.href = "/login";
+                onClick={async () => {
+                  await signOut();
                 }}
                 className="flex items-center w-full p-2 text-gray-600 dark:text-gray-300 hover:text-car-blue dark:hover:text-white rounded-md"
               >
@@ -100,7 +98,7 @@ export function Layout({ children }: LayoutProps) {
       
       {/* Основной контент */}
       <div className="flex-1">
-        {isAuthenticated && (
+        {user && (
           <header className="bg-white dark:bg-gray-800 shadow-sm py-4 px-6 flex justify-between items-center">
             <h1 className="text-xl font-semibold text-gray-800 dark:text-white">
               {getPageTitle(location.pathname)}

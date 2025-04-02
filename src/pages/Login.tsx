@@ -5,7 +5,7 @@ import { ThemeToggle } from "../components/ThemeToggle";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/use-toast";
-import { mockUsers } from "@/lib/mock-data";
+import { useAuth } from "@/lib/auth";
 
 const Login = () => {
   const [email, setEmail] = useState("");
@@ -13,35 +13,30 @@ const Login = () => {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { signIn } = useAuth();
 
   const handleLogin = async (e: FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
     try {
-      // Симуляция API запроса
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      const { error } = await signIn(email, password);
       
-      // Проверка учетных данных (в реальном приложении это будет API запрос)
-      const user = mockUsers.find(u => u.email === email);
-      
-      if (user && password === "password") {
-        // Сохраняем информацию о входе пользователя
-        localStorage.setItem("isAuthenticated", "true");
-        localStorage.setItem("user", JSON.stringify(user));
-        
-        toast({
-          title: "Вход выполнен успешно",
-          description: `Добро пожаловать, ${user.name}!`,
-        });
-        
-        navigate("/dashboard");
-      } else {
+      if (error) {
         toast({
           variant: "destructive",
           title: "Ошибка входа",
-          description: "Неверный email или пароль",
+          description: error.message === "Invalid login credentials" 
+            ? "Неверный email или пароль" 
+            : error.message,
         });
+      } else {
+        toast({
+          title: "Вход выполнен успешно",
+          description: "Добро пожаловать!",
+        });
+        
+        navigate("/dashboard");
       }
     } catch (error) {
       toast({

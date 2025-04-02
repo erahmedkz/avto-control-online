@@ -5,6 +5,7 @@ import { ThemeToggle } from "../components/ThemeToggle";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/use-toast";
+import { useAuth } from "@/lib/auth";
 
 const Register = () => {
   const [name, setName] = useState("");
@@ -15,6 +16,7 @@ const Register = () => {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { signUp } = useAuth();
 
   const handleRegister = async (e: FormEvent) => {
     e.preventDefault();
@@ -31,16 +33,23 @@ const Register = () => {
     setLoading(true);
 
     try {
-      // Симуляция API запроса
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      const { error } = await signUp(email, password, name);
       
-      toast({
-        title: "Регистрация успешна",
-        description: "Теперь вы можете войти в систему",
-      });
-      
-      // Переход на страницу входа
-      navigate("/login");
+      if (error) {
+        toast({
+          variant: "destructive",
+          title: "Ошибка регистрации",
+          description: error.message,
+        });
+      } else {
+        toast({
+          title: "Регистрация успешна",
+          description: "Проверьте вашу почту для подтверждения аккаунта",
+        });
+        
+        // Переход на страницу входа
+        navigate("/login");
+      }
     } catch (error) {
       toast({
         variant: "destructive",
