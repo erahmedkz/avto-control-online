@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -29,6 +28,7 @@ interface Vehicle {
   id: string;
   name: string;
   model: string;
+  make?: string;
   year: number;
   color?: string;
   status?: string;
@@ -61,15 +61,15 @@ const VehiclesList = () => {
       
       if (error) throw error;
       
-      // Transform data to match the Vehicle interface
       const transformedVehicles = data.map(vehicle => ({
         id: vehicle.id,
         name: vehicle.name,
         model: vehicle.model,
+        make: vehicle.model.split(' ')[0],
         year: vehicle.year,
         color: vehicle.color || "Не указан",
         status: vehicle.status || "offline",
-        licensePlate: "А123БВ77", // Temporary value
+        licensePlate: "А123БВ77",
         batteryLevel: Math.floor(Math.random() * 100),
         fuelLevel: Math.floor(Math.random() * 100),
         mileage: Math.floor(Math.random() * 50000),
