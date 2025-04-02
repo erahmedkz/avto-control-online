@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { Layout } from "../components/Layout";
@@ -21,8 +20,7 @@ import {
   Power,
   Thermometer,
   Fan,
-  LightbulbOff,
-  LightbulbOn,
+  Lightbulb,
   Music,
   AlertTriangle,
   MapPin,
@@ -61,7 +59,6 @@ const VehicleControl = () => {
       try {
         if (!id) return;
 
-        // В реальном приложении это будет API запрос
         const vehicleData = getVehicle(id);
 
         if (vehicleData) {
@@ -69,7 +66,6 @@ const VehicleControl = () => {
           setClimate(vehicleData.climate);
           setDoors(vehicleData.doors);
           setEngine(vehicleData.engine);
-          // Имитация других состояний, которых нет в исходных данных
           setLights({ isOn: false });
         }
       } catch (error) {
@@ -181,7 +177,6 @@ const VehicleControl = () => {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Основные элементы управления */}
           <div className="lg:col-span-2 space-y-6">
             <Card>
               <CardHeader>
@@ -298,11 +293,9 @@ const VehicleControl = () => {
                   <CardContent className="space-y-6">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center">
-                        {lights.isOn ? (
-                          <LightbulbOn className="h-5 w-5 mr-2 text-yellow-500" />
-                        ) : (
-                          <LightbulbOff className="h-5 w-5 mr-2 text-gray-600 dark:text-gray-300" />
-                        )}
+                        <Lightbulb 
+                          className={`h-5 w-5 mr-2 ${lights.isOn ? "text-yellow-500" : "text-gray-600 dark:text-gray-300"}`} 
+                        />
                         <span className="font-medium">Наружное освещение</span>
                       </div>
                       <Switch
@@ -404,7 +397,6 @@ const VehicleControl = () => {
             </Tabs>
           </div>
 
-          {/* Боковая панель */}
           <div className="space-y-6">
             <Card>
               <CardHeader>
@@ -512,8 +504,6 @@ const VehicleControl = () => {
   );
 };
 
-// Компоненты
-
 interface ControlCardProps {
   title: string;
   icon: React.ReactNode;
@@ -585,8 +575,6 @@ const LogItem = ({ action, time }: LogItemProps) => {
     </div>
   );
 };
-
-// Вспомогательные функции
 
 function getTimeAgo(minutesAgo: number): string {
   if (minutesAgo < 60) {
