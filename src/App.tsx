@@ -6,7 +6,6 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { useEffect } from "react";
 import { AuthProvider } from "@/lib/auth";
-import { Layout } from "@/components/Layout";
 
 // Pages
 import Index from "./pages/Index";
@@ -18,6 +17,7 @@ import VehicleDetail from "./pages/VehicleDetail";
 import VehicleControl from "./pages/VehicleControl";
 import Profile from "./pages/Profile";
 import Map from "./pages/Map";
+import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient({
@@ -62,8 +62,10 @@ const App = () => {
               <Route path="/vehicles" element={<VehiclesList />} />
               <Route path="/vehicles/:id" element={<VehicleDetail />} />
               <Route path="/control/:id" element={<VehicleControl />} />
+              <Route path="/control" element={<VehicleControl />} />
               <Route path="/profile" element={<Profile />} />
               <Route path="/map" element={<Map />} />
+              <Route path="/settings" element={<Settings />} />
               
               <Route path="*" element={<NotFound />} />
             </Routes>

@@ -25,31 +25,103 @@ import {
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/components/ui/use-toast";
-import { mockUsers, mockVehicles, mockAlerts, getVehiclesByUser, getAllAlertsByUser } from "@/lib/mock-data";
+import { mockVehicles, mockAlerts, getVehiclesByUser, getAllAlertsByUser } from "@/lib/mock-data";
 import { Vehicle, Alert, User as UserType } from "@/lib/types";
+import { useAuth } from "@/lib/auth";
+import { supabase } from "@/integrations/supabase/client";
 
 const Dashboard = () => {
-  const [user, setUser] = useState<UserType | null>(null);
+  const { user } = useAuth();
+  const [userProfile, setUserProfile] = useState<UserType | null>(null);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
 
   useEffect(() => {
-    // Получаем пользователя из локального хранилища (в реальном приложении будет API запрос)
-    const storedUser = localStorage.getItem("user");
-    const currentUser = storedUser ? JSON.parse(storedUser) : mockUsers[0];
-    setUser(currentUser);
+    // Only proceed if we have a logged-in user
+    if (!user) return;
 
-    // Загружаем автомобили и оповещения пользователя
-    const userVehicles = getVehiclesByUser(currentUser.id);
-    const userAlerts = getAllAlertsByUser(currentUser.id);
+    const fetchUserData = async () => {
+      try {
+        setLoading(true);
+        
+        // Fetch user profile from Supabase
+        const { data: profileData, error: profileError } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', user.id)
+          .single();
+        
+        if (profileError) {
+          console.error("Error fetching profile:", profileError);
+        } else {
+          setUserProfile({
+            id: profileData.id,
+            name: profileData.name || user.email?.split('@')[0] || "Пользователь",
+            email: profileData.email || user.email || "",
+            avatar: profileData.avatar || null
+          });
+        }
+
+        // Fetch vehicles from Supabase
+        const { data: vehiclesData, error: vehiclesError } = await supabase
+          .from('vehicles')
+          .select('*')
+          .eq('user_id', user.id);
+          
+        if (vehiclesError) {
+          console.error("Error fetching vehicles:", vehiclesError);
+          
+          // Fallback to mock data on error
+          const mockUserVehicles = getVehiclesByUser(user.id);
+          setVehicles(mockUserVehicles);
+        } else if (vehiclesData && vehiclesData.length > 0) {
+          // Transform data to match Vehicle interface
+          const transformedVehicles = vehiclesData.map(vehicle => ({
+            id: vehicle.id,
+            name: vehicle.name,
+            model: vehicle.model,
+            make: vehicle.model.split(' ')[0],
+            year: vehicle.year,
+            color: vehicle.color || "Не указан",
+            status: vehicle.status || "offline",
+            licensePlate: "А123БВ77",
+            batteryLevel: Math.floor(Math.random() * 100),
+            fuelLevel: Math.floor(Math.random() * 100),
+            mileage: Math.floor(Math.random() * 50000),
+            lastService: {
+              date: new Date().toISOString(),
+              type: "ТО-1"
+            },
+            image: "https://images.unsplash.com/photo-1533473359331-0135ef1b58bf?q=80&w=1000&auto=format&fit=crop"
+          }));
+          
+          setVehicles(transformedVehicles);
+        } else {
+          // If no vehicles in DB, use mock data
+          const mockUserVehicles = getVehiclesByUser(user.id);
+          setVehicles(mockUserVehicles);
+        }
+        
+        // Get mock alerts - would be replaced with real alerts from Supabase
+        const userAlerts = getAllAlertsByUser(user.id);
+        setAlerts(userAlerts);
+      } catch (error) {
+        console.error("Error fetching data:", error);
+        toast({
+          title: "Ошибка загрузки данных",
+          description: "Не удалось загрузить информацию о пользователе и автомобилях",
+          variant: "destructive",
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
     
-    setVehicles(userVehicles);
-    setAlerts(userAlerts);
-    setLoading(false);
+    fetchUserData();
     
-    // Имитация получения нового оповещения
+    // Simulate getting a new alert
     const timer = setTimeout(() => {
       toast({
         title: "Новое оповещение",
@@ -59,7 +131,7 @@ const Dashboard = () => {
     }, 5000);
     
     return () => clearTimeout(timer);
-  }, [toast]);
+  }, [user, toast]);
 
   if (loading) {
     return (
@@ -81,7 +153,7 @@ const Dashboard = () => {
           <div className="flex justify-between items-center">
             <div>
               <h2 className="text-2xl font-bold text-gray-800 dark:text-white">
-                Добро пожаловать, {user?.name}
+                Добро пожаловать, {userProfile?.name || user?.email?.split('@')[0] || "Пользователь"}
               </h2>
               <p className="text-gray-600 dark:text-gray-300 mt-1">
                 Вот обзор состояния ваших автомобилей
@@ -89,8 +161,8 @@ const Dashboard = () => {
             </div>
             <Link to="/profile">
               <div className="h-12 w-12 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
-                {user?.avatar ? (
-                  <img src={user.avatar} alt={user.name} className="h-12 w-12 rounded-full" />
+                {userProfile?.avatar ? (
+                  <img src={userProfile.avatar} alt={userProfile.name} className="h-12 w-12 rounded-full" />
                 ) : (
                   <User className="h-6 w-6 text-gray-600 dark:text-gray-300" />
                 )}
@@ -125,9 +197,11 @@ const Dashboard = () => {
             <h3 className="text-xl font-semibold text-gray-800 dark:text-white">
               Последние оповещения
             </h3>
-            <Button variant="ghost" size="sm" className="text-blue-600 dark:text-blue-400">
-              Отметить все как прочитанные
-            </Button>
+            <Link to="/settings">
+              <Button variant="ghost" size="sm" className="text-blue-600 dark:text-blue-400">
+                Все оповещения
+              </Button>
+            </Link>
           </div>
           
           <Card>
@@ -138,7 +212,7 @@ const Dashboard = () => {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-2">
-              {alerts.length > 0 ? alerts.map((alert) => (
+              {alerts.length > 0 ? alerts.slice(0, 3).map((alert) => (
                 <AlertItem key={alert.id} alert={alert} vehicle={vehicles.find(v => v.id === alert.vehicleId)} />
               )) : (
                 <div className="text-center py-6 text-gray-500 dark:text-gray-400">
@@ -147,9 +221,11 @@ const Dashboard = () => {
               )}
             </CardContent>
             <CardFooter>
-              <Button variant="outline" className="w-full">
-                Показать все оповещения
-              </Button>
+              <Link to="/settings" className="w-full">
+                <Button variant="outline" className="w-full">
+                  Показать все оповещения
+                </Button>
+              </Link>
             </CardFooter>
           </Card>
         </section>
@@ -165,7 +241,7 @@ const Dashboard = () => {
               icon={<Car />} 
               label="Управление" 
               description="Открыть/закрыть, завести"
-              link="/control"
+              link={vehicles.length > 0 ? `/control/${vehicles[0].id}` : "/vehicles"}
             />
             <ActionButton 
               icon={<MapPin />} 

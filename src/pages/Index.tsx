@@ -62,7 +62,7 @@ const Index = () => {
                   </Button>
                 </Link>
                 <a href="#features">
-                  <Button variant="outline" className="w-full sm:w-auto border-white text-white hover:bg-white/10 px-6 py-3 text-lg">
+                  <Button variant="outline" className="w-full sm:w-auto border-white text-white hover:bg-white/10 hover:text-white px-6 py-3 text-lg">
                     Узнать больше
                   </Button>
                 </a>

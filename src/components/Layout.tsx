@@ -75,13 +75,13 @@ export function Layout({ children }: LayoutProps) {
       {/* Sidebar navigation - only for authorized users */}
       {user && (
         <nav 
-          className={`fixed md:sticky top-0 z-40 h-full transition-all duration-300 ease-in-out ${
+          className={`fixed md:sticky top-0 z-40 h-screen transition-all duration-300 ease-in-out ${
             isMobile 
               ? sidebarOpen ? 'left-0' : '-left-[280px]' 
               : 'left-0'
-          } w-[280px] md:w-64 bg-white dark:bg-gray-800 shadow-lg`}
+          } w-[280px] md:w-64 bg-white dark:bg-gray-800 shadow-lg flex flex-col`}
         >
-          <div className="px-6 py-8 h-full flex flex-col">
+          <div className="px-6 py-8 flex flex-col h-full overflow-y-auto">
             <div className="flex items-center justify-between">
               <h2 className="text-xl font-bold bg-gradient-to-r from-blue-500 to-purple-600 bg-clip-text text-transparent">
                 АвтоКонтроль
@@ -115,6 +115,12 @@ export function Layout({ children }: LayoutProps) {
                 active={location.pathname === "/map"} 
               />
               <NavItem 
+                to="/settings" 
+                icon={<Bell size={20} />} 
+                label="Оповещения" 
+                active={location.pathname === "/settings"} 
+              />
+              <NavItem 
                 to="/profile" 
                 icon={<User size={20} />} 
                 label="Профиль" 
@@ -122,7 +128,7 @@ export function Layout({ children }: LayoutProps) {
               />
             </ul>
             
-            <div className="mt-auto">
+            <div className="mt-auto pt-4">
               <Button 
                 onClick={handleSignOut}
                 variant="outline"
@@ -138,17 +144,17 @@ export function Layout({ children }: LayoutProps) {
       
       {/* Main content */}
       <div className="flex-1 transition-all duration-300">
-        {/* Only one header should be shown here */}
+        {/* Only show header for authenticated users */}
         {user && (
           <header className="bg-white dark:bg-gray-800 shadow-sm py-4 px-6 flex justify-between items-center sticky top-0 z-10">
             <h1 className="text-xl font-semibold text-gray-800 dark:text-white ml-12 md:ml-0">
               {getPageTitle(location.pathname)}
             </h1>
             <div className="flex items-center space-x-4">
-              <button className="relative p-2 rounded-full bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors">
+              <Link to="/settings" className="relative p-2 rounded-full bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors">
                 <Bell size={18} />
                 <span className="absolute top-0 right-0 h-2 w-2 rounded-full bg-red-500"></span>
-              </button>
+              </Link>
               <ThemeToggle />
             </div>
           </header>
