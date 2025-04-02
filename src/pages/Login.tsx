@@ -4,7 +4,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { ThemeToggle } from "../components/ThemeToggle";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useToast } from "@/components/ui/use-toast";
+import { toast } from "sonner";
 import { useAuth } from "@/lib/auth";
 
 const Login = () => {
@@ -12,7 +12,6 @@ const Login = () => {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
-  const { toast } = useToast();
   const { signIn } = useAuth();
 
   const handleLogin = async (e: FormEvent) => {
@@ -23,47 +22,42 @@ const Login = () => {
       const { error } = await signIn(email, password);
       
       if (error) {
-        toast({
-          variant: "destructive",
-          title: "Ошибка входа",
-          description: error.message === "Invalid login credentials" 
-            ? "Неверный email или пароль" 
-            : error.message,
-        });
-      } else {
-        toast({
-          title: "Вход выполнен успешно",
-          description: "Добро пожаловать!",
-        });
+        console.error("Login error:", error);
         
-        navigate("/dashboard");
+        if (error.message === "Invalid login credentials") {
+          toast.error("Неверный email или пароль");
+        } else if (error.message.includes("Email not confirmed")) {
+          toast.error("Email не подтвержден. Пожалуйста, проверьте вашу почту");
+        } else {
+          toast.error(error.message);
+        }
+      } else {
+        // Успешный вход произойдет через onAuthStateChange в AuthProvider
+        console.log("Login successful");
       }
     } catch (error) {
-      toast({
-        variant: "destructive",
-        title: "Ошибка",
-        description: "Произошла ошибка при входе. Пожалуйста, попробуйте снова.",
-      });
+      console.error("Unexpected error during login:", error);
+      toast.error("Произошла ошибка при входе. Пожалуйста, попробуйте снова.");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-gray-100 dark:bg-gray-900 p-4">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-gray-100 to-blue-50 dark:from-gray-900 dark:to-gray-800 p-4">
       <div className="absolute top-4 right-4">
         <ThemeToggle />
       </div>
       
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-car-blue dark:text-blue-400">АвтоКонтроль</h1>
+          <h1 className="text-3xl font-bold text-car-blue dark:text-blue-400 tracking-tight">АвтоКонтроль</h1>
           <p className="text-gray-600 dark:text-gray-300 mt-2">
             Управляйте вашим автомобилем с любой точки мира
           </p>
         </div>
         
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-8 animate-fade-in">
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-8 animate-fade-in border border-gray-200 dark:border-gray-700">
           <h2 className="text-2xl font-semibold text-gray-800 dark:text-white mb-6">
             Вход в систему
           </h2>
@@ -79,7 +73,7 @@ const Login = () => {
                 onChange={(e) => setEmail(e.target.value)}
                 required
                 placeholder="ivan@example.com"
-                className="w-full"
+                className="w-full focus:ring-2 focus:ring-blue-500"
               />
             </div>
             
@@ -98,13 +92,13 @@ const Login = () => {
                 onChange={(e) => setPassword(e.target.value)}
                 required
                 placeholder="********"
-                className="w-full"
+                className="w-full focus:ring-2 focus:ring-blue-500"
               />
             </div>
             
             <Button 
               type="submit" 
-              className="w-full bg-car-blue hover:bg-blue-600"
+              className="w-full bg-car-blue hover:bg-blue-600 transition-all duration-200 py-2 h-11"
               disabled={loading}
             >
               {loading ? "Вход..." : "Войти"}
@@ -114,7 +108,7 @@ const Login = () => {
           <div className="mt-6 text-center">
             <p className="text-sm text-gray-600 dark:text-gray-400">
               Нет учетной записи?{" "}
-              <Link to="/register" className="text-car-blue dark:text-blue-400 hover:underline">
+              <Link to="/register" className="text-car-blue dark:text-blue-400 hover:underline font-medium">
                 Зарегистрироваться
               </Link>
             </p>

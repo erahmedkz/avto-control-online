@@ -3,6 +3,7 @@ import { createContext, useContext, useEffect, useState } from 'react';
 import { Session, User, AuthError } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
 
 // Типы для контекста аутентификации
 type AuthContextType = {
@@ -31,27 +32,49 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate();
 
   useEffect(() => {
+    console.log("AuthProvider mounted");
+    
     // Устанавливаем слушатель изменения состояния аутентификации
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, currentSession) => {
+      async (event, currentSession) => {
+        console.log("Auth state changed:", event, currentSession?.user?.id);
         setSession(currentSession);
         setUser(currentSession?.user ?? null);
         
         // Если событие выхода из системы - перенаправляем на страницу входа
         if (event === 'SIGNED_OUT') {
           navigate('/login');
-        } else if (event === 'SIGNED_IN' && window.location.pathname === '/login') {
-          navigate('/dashboard');
+          toast.success("Вы успешно вышли из системы");
+        } else if (event === 'SIGNED_IN') {
+          if (window.location.pathname === '/login' || window.location.pathname === '/register') {
+            navigate('/dashboard');
+            toast.success("Вход выполнен успешно");
+          }
         }
       }
     );
 
     // Проверяем текущую сессию
-    supabase.auth.getSession().then(({ data: { session: currentSession } }) => {
-      setSession(currentSession);
-      setUser(currentSession?.user ?? null);
-      setLoading(false);
-    });
+    const getInitialSession = async () => {
+      try {
+        const { data: { session: currentSession } } = await supabase.auth.getSession();
+        console.log("Initial session:", currentSession?.user?.id);
+        setSession(currentSession);
+        setUser(currentSession?.user ?? null);
+        
+        if (currentSession?.user) {
+          if (window.location.pathname === '/login' || window.location.pathname === '/register') {
+            navigate('/dashboard');
+          }
+        }
+      } catch (error) {
+        console.error("Error getting session:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    getInitialSession();
 
     return () => {
       subscription.unsubscribe();
@@ -60,12 +83,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Функция для входа в систему
   const signIn = async (email: string, password: string) => {
+    console.log("Attempting to sign in with:", email);
     const result = await supabase.auth.signInWithPassword({ email, password });
+    console.log("Sign in result:", result);
     return result;
   };
 
   // Функция для регистрации
   const signUp = async (email: string, password: string, name: string) => {
+    console.log("Attempting to sign up with:", email, name);
     const result = await supabase.auth.signUp({
       email,
       password,
@@ -75,6 +101,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         },
       },
     });
+    console.log("Sign up result:", result);
     return result;
   };
 
